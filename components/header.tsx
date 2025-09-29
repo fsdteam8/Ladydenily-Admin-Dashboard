@@ -13,7 +13,7 @@ export function Header() {
   }
 
   return (
-    <header className="flex h-16 items-center justify-end px-6 bg-background border-b border-border">
+    <header className="flex h-[72px] items-center justify-end px-6 border-b border-border bg-[#E8ECF1]">
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-secondary">{session?.user?.name || "Alex rock"}</span>
         <span className="text-xs text-muted-foreground">{session?.user?.role || "Admin"}</span>

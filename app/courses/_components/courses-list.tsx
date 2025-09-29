@@ -17,12 +17,32 @@ interface Coordinator {
   }
 }
 
+interface Video {
+  name: string
+  no: number
+  url: string
+  _id: string
+}
+
+interface Resource {
+  name: string
+  url: string
+  _id: string
+}
+
+interface Assignment {
+  title: string
+  start: string
+  submission: any[]
+  _id: string
+}
+
 interface Module {
   _id: string
   name: string
-  video: any[]
-  resources: any[]
-  assignment: any[]
+  video: Video[]
+  resources: Resource[]
+  assignment: Assignment[]
 }
 
 interface ApiCourse {
@@ -35,6 +55,7 @@ interface ApiCourse {
   coordinator: Coordinator[]
   modules: Module[]
   enrolled: any[]
+  createdAt: string
 }
 
 interface Course {
@@ -50,31 +71,35 @@ interface Course {
   added: string
 }
 
-const fetchCourses = async (token?: string): Promise<ApiCourse[]> => {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL
-  if (!baseUrl) {
-    throw new Error("API base URL not configured")
+interface ApiResponse {
+  data: {
+    course: ApiCourse[]
   }
+  meta: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+  }
+}
 
-  const response = await fetch(`${baseUrl}/course/all-courses`, {
+const fetchCourses = async (token?: string, page = 1, limit = 10): Promise<ApiResponse> => {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+  const response = await fetch(`${baseUrl}/course/all-courses?page=${page}&limit=${limit}`, {
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),
     },
   })
   if (!response.ok) {
-    throw new Error("Failed to fetch courses")
+    throw new Error(`Failed to fetch courses: ${response.statusText}`)
   }
 
   const data = await response.json()
-  return data.data.course || []
+  return data
 }
 
 const deleteCourse = async (courseId: string, token?: string): Promise<void> => {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL
-  if (!baseUrl) {
-    throw new Error("API base URL not configured")
-  }
-
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
   const response = await fetch(`${baseUrl}/course/courses/${courseId}`, {
     method: "DELETE",
     headers: {
@@ -83,25 +108,43 @@ const deleteCourse = async (courseId: string, token?: string): Promise<void> => 
   })
 
   if (!response.ok) {
-    throw new Error("Failed to delete course")
+    throw new Error(`Failed to delete course: ${response.statusText}`)
   }
 }
 
 const transformApiCourse = (apiCourse: ApiCourse): Course => {
+  // Strip HTML tags from description for safe rendering
+  const stripHtml = (html: string) => html.replace(/<[^>]+>/g, "")
+
+  // Check for duplicate assignment IDs
+  const assignmentIds = new Set()
+  apiCourse.modules.forEach((module, index) => {
+    module.assignment.forEach((assignment) => {
+      if (assignmentIds.has(assignment._id)) {
+        console.warn(`Duplicate assignment ID ${assignment._id} found in module ${module._id}`)
+      }
+      assignmentIds.add(assignment._id)
+    })
+  })
+
+  // Derive deadline from the first assignment's start field, if available
+  const deadline =
+    apiCourse.modules[0]?.assignment[0]?.start || "4 Weeks"
+
   return {
     id: apiCourse._id,
     title: apiCourse.name,
-    description: apiCourse.description,
+    description: stripHtml(apiCourse.description),
     thumbnail: apiCourse.photo,
     trainers: apiCourse.coordinator.map((coord) => ({
       name: coord.name,
-      avatar: coord.avatar?.url || "/placeholder.svg",
+      avatar: coord.avatar?.url || "/placeholder.svg?height=32&width=32",
     })),
     enroll: apiCourse.enrolled.length,
     modules: apiCourse.modules.length,
-    deadline: "4 Weeks",
+    deadline,
     price: apiCourse.offerPrice ? `$${apiCourse.offerPrice}` : `$${apiCourse.price}`,
-    added: new Date().toLocaleDateString("en-US", {
+    added: new Date(apiCourse.createdAt).toLocaleDateString("en-US", {
       day: "numeric",
       month: "short",
       year: "numeric",
@@ -113,6 +156,9 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCourses, setTotalCourses] = useState(0)
 
   const { data: session } = useSession()
   const token = session?.accessToken
@@ -122,9 +168,11 @@ export default function CoursesPage() {
       try {
         setLoading(true)
         setError(null)
-        const apiCourses = await fetchCourses(token)
-        const transformedCourses = apiCourses.map(transformApiCourse)
+        const response = await fetchCourses(token, page)
+        const transformedCourses = response.data.course.map(transformApiCourse)
         setCourses(transformedCourses)
+        setTotalPages(response.meta.totalPages)
+        setTotalCourses(response.meta.total)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load courses")
         console.error("Error fetching courses:", err)
@@ -134,16 +182,22 @@ export default function CoursesPage() {
     }
 
     loadCourses()
-  }, [token])
+  }, [token, page])
 
   const handleDeleteCourse = async (courseId: string) => {
+    if (!confirm("Are you sure you want to delete this course?")) return
     try {
       await deleteCourse(courseId, token)
       setCourses((prev) => prev.filter((course) => course.id !== courseId))
+      setTotalCourses((prev) => prev - 1)
     } catch (err) {
       console.error("Error deleting course:", err)
       setError(err instanceof Error ? err.message : "Failed to delete course")
     }
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage)
   }
 
   if (loading) {
@@ -160,25 +214,9 @@ export default function CoursesPage() {
     )
   }
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-foreground">Courses</h1>
-          <p className="text-sm text-muted-foreground">Dashboard &gt; Courses</p>
-        </div>
-        <div className="bg-card rounded-lg border border-border p-8 text-center">
-          <p className="text-destructive">Error: {error}</p>
-          <Button onClick={() => window.location.reload()} className="mt-4" variant="outline">
-            Retry
-          </Button>
-        </div>
-      </div>
-    )
-  }
 
   return (
-    <div className="p-6">
+    <div className="p-6 pt-12">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-foreground">Courses</h1>
         <p className="text-sm text-muted-foreground">Dashboard &gt; Courses</p>
@@ -186,17 +224,17 @@ export default function CoursesPage() {
 
       <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full" aria-label="Courses table">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left p-4 font-medium text-muted-foreground">Courses</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Trainer</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Enroll</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Modules</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Deadline</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Price</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Added</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Actions</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Courses</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Trainer</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Enroll</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Modules</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Deadline</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Price</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Added</th>
+                <th scope="col" className="text-left p-4 font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -218,6 +256,7 @@ export default function CoursesPage() {
                             width={64}
                             height={48}
                             className="w-full h-full object-cover"
+                            onError={(e) => (e.currentTarget.src = "/placeholder.svg?height=48&width=64")}
                           />
                         </div>
                         <div>
@@ -231,7 +270,7 @@ export default function CoursesPage() {
                         {course.trainers.map((trainer, trainerIndex) => (
                           <div key={trainerIndex} className="flex items-center gap-2">
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={trainer.avatar || "/placeholder.svg"} alt={trainer.name} />
+                              <AvatarImage src={trainer.avatar} alt={trainer.name} />
                               <AvatarFallback>
                                 {trainer.name
                                   .split(" ")
@@ -254,15 +293,9 @@ export default function CoursesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-muted-foreground hover:text-foreground hover:bg-muted"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteCourse(course.id)}
+                          aria-label={`Delete course ${course.title}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -278,9 +311,13 @@ export default function CoursesPage() {
         <div className="border-t border-border p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing 1 to {courses.length} of {courses.length} results
+              Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, totalCourses)} of {totalCourses} results
             </p>
-            <CoursePagination />
+            <CoursePagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
           </div>
         </div>
       </div>

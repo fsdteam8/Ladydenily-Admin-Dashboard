@@ -28,7 +28,7 @@ export default function SignalSendPage() {
   ]
 
   return (
-    <div className="p-6">
+    <div className="p-6 pt-12">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-foreground">Signal Send</h1>
         <p className="text-sm text-muted-foreground">Dashboard &gt; Signal Send</p>

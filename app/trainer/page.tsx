@@ -67,7 +67,7 @@ export default function TrainerPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 pt-12">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

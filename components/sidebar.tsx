@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"; // Added Dialog imports
+import Image from "next/image";
 
 const navigation = [
   { name: "Overview", href: "/", icon: LayoutDashboard },
@@ -43,10 +44,18 @@ export function Sidebar() {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false); // Added state for modal
 
   return (
-    <div className="flex h-screen w-52 flex-col bg-sidebar border-r border-sidebar-border">
+    <div className="flex h-screen w-52 flex-col bg-[#E8ECF1] border-r border-sidebar-border">
       {/* Logo */}
-      <div className="flex h-16 items-center px-4">
-        <Logo />
+      <div className="flex items-center p-4">
+        <Link href="/">
+          <Image
+            src="/LTA_LOGO.png"
+            alt="Logo"
+            width={100}
+            height={100}
+            className="w-[151px] h-[80px]"
+          />
+        </Link>
       </div>
 
       {/* Navigation */}
@@ -58,18 +67,16 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                "group flex items-center px-3 py-3 text-base font-medium rounded-md transition-colors text-[#1A3E74]",
                 isActive
                   ? "bg-primary text-primary-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  : "text-[#1A3E74] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               )}
             >
               <item.icon
                 className={cn(
                   "mr-3 h-5 w-5 flex-shrink-0",
-                  isActive
-                    ? "text-primary-foreground"
-                    : "text-sidebar-foreground"
+                  isActive ? "text-primary-foreground" : "text-[#1A3E74]"
                 )}
               />
               {item.name}
@@ -80,13 +87,13 @@ export function Sidebar() {
 
       {/* Logout */}
       <div className="px-2 pb-4">
-        <Button
-          className="group flex w-full items-center px-3 py-2 text-sm font-medium rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+        <button
+          className="text-[#1A3E74] flex items-center"
           onClick={() => setIsLogoutModalOpen(true)}
         >
-          <LogOut className="mr-3 h-5 w-5 flex-shrink-0" />
+          <LogOut className="mr-3 h-5 w-5 flex-shrink-0 text-[#1A3E74]" />
           Logout
-        </Button>
+        </button>
       </div>
 
       {/* Logout Confirmation Modal */}

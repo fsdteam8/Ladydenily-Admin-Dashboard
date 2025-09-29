@@ -65,7 +65,7 @@ export default function UserPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 pt-12">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-foreground">User</h1>

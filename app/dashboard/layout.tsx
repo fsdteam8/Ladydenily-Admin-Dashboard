@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useSession } from "next-auth/react"
+import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
@@ -21,6 +21,10 @@ export default function DashboardLayout({
       router.push("/auth/login")
       return
     }
+    if (session.user?.role !== "admin") {
+      void signOut({ callbackUrl: "/auth/login?error=admin_only" })
+      return
+    }
   }, [session, status, router])
 
   if (status === "loading") {
@@ -31,7 +35,7 @@ export default function DashboardLayout({
     )
   }
 
-  if (!session) {
+  if (!session || session.user?.role !== "admin") {
     return null
   }
 

@@ -19,11 +19,16 @@ export const authOptions: NextAuthOptions = {
           const response = await authAPI.login(credentials.email, credentials.password)
 
           if (response.success && response.data) {
+            const role = response.data.role || response.data.user?.role
+            if (role !== "admin") {
+              return null
+            }
+
             return {
               id: response.data._id,
               email: response.data.user.email,
               name: response.data.user.name,
-              role: response.data.role,
+              role,
               accessToken: response.data.accessToken,
               refreshToken: response.data.refreshToken,
             }

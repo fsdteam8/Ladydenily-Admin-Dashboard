@@ -23,12 +23,20 @@ export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get("callbackUrl") || "/"
+  const authError = searchParams.get("error")
+
+  useEffect(() => {
+    if (authError === "admin_only") {
+      setError("Only admin accounts are allowed to login.")
+      toast.error("Only admin accounts are allowed to login.")
+    }
+  }, [authError])
 
   useEffect(() => {
     // Check if user is already authenticated
     const checkSession = async () => {
       const session = await getSession()
-      if (session) {
+      if (session?.user?.role === "admin") {
         router.push(callbackUrl)
       }
     }
@@ -51,11 +59,14 @@ export default function LoginPage() {
         toast.error("Invalid email or password")
         setError("Invalid email or password")
       } else {
-        toast.success("Login successful!")
         // Get session to ensure user is authenticated
         const session = await getSession()
-        if (session) {
+        if (session?.user?.role === "admin") {
+          toast.success("Login successful!")
           router.push(callbackUrl)
+        } else {
+          toast.error("Only admin accounts are allowed to login.")
+          setError("Only admin accounts are allowed to login.")
         }
       }
     } catch (error) {

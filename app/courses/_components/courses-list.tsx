@@ -2,7 +2,8 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Edit, Trash2 } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Eye, Trash2 } from "lucide-react"
 import { CoursePagination } from "@/components/course-pagination"
 import Image from "next/image"
 import { useState, useEffect } from "react"
@@ -12,7 +13,17 @@ interface Coordinator {
   _id: string
   name: string
   email: string
+  phone?: string
+  username?: string
+  role?: string
+  createdAt?: string
+  updatedAt?: string
+  uniqueId?: string
+  isStripeOnboarded?: boolean
+  fine?: number
+  __v?: number
   avatar?: {
+    public_id?: string
     url: string
   }
 }
@@ -21,12 +32,14 @@ interface Video {
   name: string
   no: number
   url: string
+  public_id?: string
   _id: string
 }
 
 interface Resource {
   name: string
   url: string
+  public_id?: string
   _id: string
 }
 
@@ -43,6 +56,7 @@ interface Module {
   video: Video[]
   resources: Resource[]
   assignment: Assignment[]
+  __v?: number
 }
 
 interface ApiCourse {
@@ -50,12 +64,17 @@ interface ApiCourse {
   name: string
   description: string
   photo: string | null
+  photoPublicId?: string
   price: number
   offerPrice: number
+  isPublished?: boolean
+  publishedAt?: string | null
   coordinator: Coordinator[]
   modules: Module[]
   enrolled: any[]
   createdAt: string
+  updatedAt?: string
+  __v?: number
 }
 
 interface Course {
@@ -81,6 +100,14 @@ interface ApiResponse {
     limit: number
     totalPages: number
   }
+}
+
+interface SingleCourseResponse {
+  success?: boolean
+  message?: string
+  data?: {
+    course?: ApiCourse
+  } | ApiCourse
 }
 
 const fetchCourses = async (token?: string, page = 1, limit = 10): Promise<ApiResponse> => {
@@ -110,6 +137,42 @@ const deleteCourse = async (courseId: string, token?: string): Promise<void> => 
   if (!response.ok) {
     throw new Error(`Failed to delete course: ${response.statusText}`)
   }
+}
+
+const fetchCourseById = async (courseId: string, token?: string): Promise<ApiCourse> => {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
+  const headers = {
+    ...(token && { Authorization: `Bearer ${token}` }),
+  }
+
+  // Keep compatibility with both route patterns:
+  // router.get("/courses/:id", protect, getCourse)
+  // and existing /course/courses/:id pattern used in this project.
+  const endpoints = [`${baseUrl}/courses/${courseId}`, `${baseUrl}/course/courses/${courseId}`]
+
+  let data: SingleCourseResponse | null = null
+
+  for (const endpoint of endpoints) {
+    const response = await fetch(endpoint, { headers })
+    if (response.ok) {
+      data = (await response.json()) as SingleCourseResponse
+      break
+    }
+  }
+
+  if (!data) {
+    throw new Error("Failed to fetch course details")
+  }
+
+  if (data.data && typeof data.data === "object" && "course" in data.data) {
+    if (data.data.course) {
+      return data.data.course
+    }
+  } else if (data.data) {
+    return data.data
+  }
+
+  throw new Error("Course details not found")
 }
 
 const transformApiCourse = (apiCourse: ApiCourse): Course => {
@@ -159,6 +222,10 @@ export default function CoursesPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCourses, setTotalCourses] = useState(0)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsError, setDetailsError] = useState<string | null>(null)
+  const [selectedCourse, setSelectedCourse] = useState<ApiCourse | null>(null)
 
   const { data: session } = useSession()
   const token = session?.accessToken
@@ -198,6 +265,21 @@ export default function CoursesPage() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage)
+  }
+
+  const handleViewCourse = async (courseId: string) => {
+    try {
+      setIsDetailsOpen(true)
+      setDetailsLoading(true)
+      setDetailsError(null)
+      const courseDetails = await fetchCourseById(courseId, token)
+      setSelectedCourse(courseDetails)
+    } catch (err) {
+      setDetailsError(err instanceof Error ? err.message : "Failed to load course details")
+      setSelectedCourse(null)
+    } finally {
+      setDetailsLoading(false)
+    }
   }
 
   if (loading) {
@@ -293,6 +375,14 @@ export default function CoursesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleViewCourse(course.id)}
+                          aria-label={`View course details for ${course.title}`}
+                        >
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteCourse(course.id)}
                           aria-label={`Delete course ${course.title}`}
@@ -321,6 +411,193 @@ export default function CoursesPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Course Details</DialogTitle>
+          </DialogHeader>
+
+          {detailsLoading && <p className="text-sm text-muted-foreground">Loading details...</p>}
+
+          {detailsError && <p className="text-sm text-destructive">{detailsError}</p>}
+
+          {!detailsLoading && !detailsError && selectedCourse && (
+            <div className="space-y-5">
+              <div className="w-full h-48 rounded-md overflow-hidden bg-muted">
+                <Image
+                  src={selectedCourse.photo || "/placeholder.svg?height=192&width=768&query=course banner"}
+                  alt={selectedCourse.name}
+                  width={768}
+                  height={192}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold">{selectedCourse.name}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {selectedCourse.description.replace(/<[^>]+>/g, "")}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Course ID</p>
+                  <p className="font-medium break-all">{selectedCourse._id}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Price</p>
+                  <p className="font-medium">${selectedCourse.price}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Offer Price</p>
+                  <p className="font-medium">${selectedCourse.offerPrice || selectedCourse.price}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Enrolled</p>
+                  <p className="font-medium">{selectedCourse.enrolled.length}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Modules</p>
+                  <p className="font-medium">{selectedCourse.modules.length}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Published</p>
+                  <p className="font-medium">{selectedCourse.isPublished ? "Yes" : "No"}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Published At</p>
+                  <p className="font-medium">{selectedCourse.publishedAt || "N/A"}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Photo Public ID</p>
+                  <p className="font-medium break-all">{selectedCourse.photoPublicId || "N/A"}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Created At</p>
+                  <p className="font-medium">{selectedCourse.createdAt || "N/A"}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Updated At</p>
+                  <p className="font-medium">{selectedCourse.updatedAt || "N/A"}</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground">Version</p>
+                  <p className="font-medium">{selectedCourse.__v ?? "N/A"}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium">Coordinators</p>
+                {selectedCourse.coordinator.length ? (
+                  <div className="space-y-2">
+                    {selectedCourse.coordinator.map((coord) => (
+                      <div key={coord._id} className="rounded-md border p-3 text-sm">
+                        <p className="font-medium">{coord.name}</p>
+                        <p className="text-muted-foreground">{coord.email}</p>
+                        <p className="text-muted-foreground">ID: {coord._id}</p>
+                        <p className="text-muted-foreground">Phone: {coord.phone || "N/A"}</p>
+                        <p className="text-muted-foreground">Username: {coord.username || "N/A"}</p>
+                        <p className="text-muted-foreground">Role: {coord.role || "N/A"}</p>
+                        <p className="text-muted-foreground">Unique ID: {coord.uniqueId || "N/A"}</p>
+                        <p className="text-muted-foreground">Fine: {coord.fine ?? "N/A"}</p>
+                        <p className="text-muted-foreground">
+                          Stripe Onboarded: {coord.isStripeOnboarded ? "Yes" : "No"}
+                        </p>
+                        <p className="text-muted-foreground break-all">
+                          Avatar Public ID: {coord.avatar?.public_id || "N/A"}
+                        </p>
+                        <p className="text-muted-foreground break-all">Avatar URL: {coord.avatar?.url || "N/A"}</p>
+                        <p className="text-muted-foreground">Created At: {coord.createdAt || "N/A"}</p>
+                        <p className="text-muted-foreground">Updated At: {coord.updatedAt || "N/A"}</p>
+                        <p className="text-muted-foreground">Version: {coord.__v ?? "N/A"}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No coordinator assigned.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium">Modules</p>
+                {selectedCourse.modules.length ? (
+                  <div className="space-y-2">
+                    {selectedCourse.modules.map((module) => (
+                      <div key={module._id} className="rounded-md border p-3 text-sm">
+                        <p className="font-medium">{module.name}</p>
+                        <p className="text-muted-foreground">Module ID: {module._id}</p>
+                        <p className="text-muted-foreground">Version: {module.__v ?? "N/A"}</p>
+                        <p className="text-muted-foreground">
+                          Videos: {module.video.length} | Resources: {module.resources.length} | Assignments:{" "}
+                          {module.assignment.length}
+                        </p>
+                        {module.video.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <p className="font-medium">Videos</p>
+                            {module.video.map((video) => (
+                              <div key={video._id} className="text-muted-foreground break-all">
+                                {video.no}. {video.name} | {video.url} | public_id: {video.public_id || "N/A"} | id:{" "}
+                                {video._id}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {module.resources.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <p className="font-medium">Resources</p>
+                            {module.resources.map((resource) => (
+                              <div key={resource._id} className="text-muted-foreground break-all">
+                                {resource.name} | {resource.url} | public_id: {resource.public_id || "N/A"} | id:{" "}
+                                {resource._id}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {module.assignment.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <p className="font-medium">Assignments</p>
+                            {module.assignment.map((assignment) => (
+                              <div key={assignment._id} className="text-muted-foreground break-all">
+                                {assignment.title} | start: {assignment.start} | id: {assignment._id}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No modules available.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium">Enrolled IDs</p>
+                {selectedCourse.enrolled.length ? (
+                  <div className="rounded-md border p-3 text-sm text-muted-foreground space-y-1">
+                    {selectedCourse.enrolled.map((enrollId, index) => (
+                      <p key={`${enrollId}-${index}`} className="break-all">
+                        {String(enrollId)}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No enrolled users.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-medium">All Data (Raw JSON)</p>
+                <pre className="rounded-md border bg-muted/30 p-3 text-xs overflow-x-auto">
+                  {JSON.stringify(selectedCourse, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

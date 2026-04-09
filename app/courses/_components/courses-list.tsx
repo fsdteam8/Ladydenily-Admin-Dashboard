@@ -271,11 +271,23 @@ const getAssetKind = (url: string, name?: string) => {
   return "file"
 }
 
+const getVideoMimeType = (url: string, name?: string) => {
+  const extension = getAssetExtension(url, name)
+
+  if (extension === "mov") return "video/quicktime"
+  if (extension === "webm") return "video/webm"
+  if (extension === "ogg") return "video/ogg"
+  if (extension === "m4v") return "video/x-m4v"
+
+  return "video/mp4"
+}
+
 const renderAssetPreview = (
   asset: { _id: string; name: string; url: string; public_id?: string; no?: number },
   label: string,
+  forcedKind?: ReturnType<typeof getAssetKind>,
 ) => {
-  const kind = getAssetKind(asset.url, asset.name)
+  const kind = forcedKind || getAssetKind(asset.url, asset.name)
   const extension = getAssetExtension(asset.url, asset.name) || "file"
   const title = asset.no ? `${asset.no}. ${asset.name}` : asset.name
 
@@ -306,8 +318,8 @@ const renderAssetPreview = (
       )}
 
       {kind === "video" && (
-        <video controls className="w-full rounded-md border bg-black/5">
-          <source src={asset.url} />
+        <video controls preload="metadata" className="w-full rounded-md border bg-black/5">
+          <source src={asset.url} type={getVideoMimeType(asset.url, asset.name)} />
           Your browser does not support the video tag.
         </video>
       )}
@@ -708,7 +720,7 @@ export default function CoursesPage() {
                           <div className="mt-3 space-y-3">
                             <p className="font-medium">Videos</p>
                             {module.video.map((video) => (
-                              renderAssetPreview(video, "Video")
+                              renderAssetPreview(video, "Video", "video")
                             ))}
                           </div>
                         )}

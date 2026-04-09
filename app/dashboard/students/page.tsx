@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { studentsAPI, type User } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -58,6 +58,14 @@ export default function StudentsPage() {
 
   const students = studentsData?.data?.students || []
   const meta = studentsData?.data?.meta
+
+  useEffect(() => {
+    const lastPage = Math.max(meta?.totalPages ?? 1, 1)
+
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage)
+    }
+  }, [currentPage, meta?.totalPages])
 
   if (error) {
     return (

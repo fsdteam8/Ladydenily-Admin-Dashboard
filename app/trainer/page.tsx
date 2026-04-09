@@ -1,21 +1,37 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { trainersAPI, type User } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Trash2, Plus } from "lucide-react"
+import { Eye, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { TrainerPagination } from "@/components/trainer-pagination"
 import { AddTrainerModal } from "@/components/add-trainer-modal"
 import { DeleteConfirmModal } from "@/components/delete-confirm-modal"
+import { UserDetailsModal } from "@/components/user-details-modal"
+
+function formatDate(value?: string) {
+  if (!value) return "N/A"
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return "N/A"
+  }
+
+  return date.toLocaleDateString()
+}
 
 export default function TrainerPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; trainer: User | null }>({
+    isOpen: false,
+    trainer: null,
+  })
+  const [viewModal, setViewModal] = useState<{ isOpen: boolean; trainer: User | null }>({
     isOpen: false,
     trainer: null,
   })
@@ -47,6 +63,10 @@ export default function TrainerPage() {
     setDeleteModal({ isOpen: true, trainer })
   }
 
+  const handleViewTrainer = (trainer: User) => {
+    setViewModal({ isOpen: true, trainer })
+  }
+
   const confirmDelete = () => {
     if (deleteModal.trainer) {
       deleteTrainerMutation.mutate(deleteModal.trainer._id)
@@ -55,6 +75,14 @@ export default function TrainerPage() {
 
   const trainers = trainersData?.data?.trainers || []
   const meta = trainersData?.data?.meta
+
+  useEffect(() => {
+    const lastPage = Math.max(meta?.totalPages ?? 1, 1)
+
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage)
+    }
+  }, [currentPage, meta?.totalPages])
 
   if (error) {
     return (
@@ -92,8 +120,8 @@ export default function TrainerPage() {
                 <th className="text-left p-4 font-medium text-muted-foreground">Name</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Email</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Phone</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Experience</th>
-                <th className="text-left p-4 font-medium text-muted-foreground">Location</th>
+                <th className="text-left p-4 font-medium text-muted-foreground">Created At</th>
+                <th className="text-left p-4 font-medium text-muted-foreground">Updated At</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Actions</th>
               </tr>
             </thead>
@@ -120,7 +148,10 @@ export default function TrainerPage() {
                         <Skeleton className="h-4 w-32" />
                       </td>
                       <td className="p-4">
-                        <Skeleton className="h-8 w-8" />
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-8 w-8" />
+                          <Skeleton className="h-8 w-8" />
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -139,21 +170,29 @@ export default function TrainerPage() {
                         </div>
                       </td>
                       <td className="p-4 text-muted-foreground">{trainer.email}</td>
-                      <td className="p-4 text-foreground">{trainer.phone}</td>
-                      <td className="p-4 text-foreground">{trainer.treding_profile?.trading_exprience || "N/A"}</td>
-                      <td className="p-4 text-muted-foreground">
-                        {trainer.address?.city}, {trainer.address?.state}
-                      </td>
+                      <td className="p-4 text-foreground">{trainer.phone || "------"}</td>
+                      <td className="p-4 text-foreground">{formatDate(trainer.createdAt)}</td>
+                      <td className="p-4 text-muted-foreground">{formatDate(trainer.updatedAt)}</td>
                       <td className="p-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteTrainer(trainer)}
-                          disabled={deleteTrainerMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hover:bg-primary/10"
+                            onClick={() => handleViewTrainer(trainer)}
+                          >
+                            <Eye className="h-4 w-4 text-primary" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteTrainer(trainer)}
+                            disabled={deleteTrainerMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -166,7 +205,7 @@ export default function TrainerPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {meta
-                ? `Showing ${(currentPage - 1) * 10 + 1} to ${Math.min(currentPage * 10, meta.total)} of ${meta.total} results`
+                ? `Showing ${meta.total === 0 ? 0 : (currentPage - 1) * 10 + 1} to ${Math.min(currentPage * 10, meta.total)} of ${meta.total} results`
                 : "Loading..."}
             </p>
             {meta && (
@@ -193,6 +232,14 @@ export default function TrainerPage() {
         title="Delete Trainer"
         description={`Are you sure you want to delete ${deleteModal.trainer?.name}? This action cannot be undone.`}
         isLoading={deleteTrainerMutation.isPending}
+      />
+
+      <UserDetailsModal
+        isOpen={viewModal.isOpen}
+        onClose={() => setViewModal({ isOpen: false, trainer: null })}
+        user={viewModal.trainer}
+        title="Trainer Details"
+        description="View all available trainer information."
       />
     </div>
   )

@@ -251,12 +251,28 @@ export default function CoursesPage() {
     loadCourses()
   }, [token, page])
 
+  useEffect(() => {
+    const lastPage = Math.max(totalPages, 1)
+
+    if (page > lastPage) {
+      setPage(lastPage)
+    }
+  }, [page, totalPages])
+
   const handleDeleteCourse = async (courseId: string) => {
     if (!confirm("Are you sure you want to delete this course?")) return
     try {
       await deleteCourse(courseId, token)
       setCourses((prev) => prev.filter((course) => course.id !== courseId))
-      setTotalCourses((prev) => prev - 1)
+      setTotalCourses((prev) => {
+        const nextTotal = Math.max(prev - 1, 0)
+        const nextTotalPages = Math.max(Math.ceil(nextTotal / 10), 1)
+
+        setTotalPages(nextTotalPages)
+        setPage((currentPage) => Math.min(currentPage, nextTotalPages))
+
+        return nextTotal
+      })
     } catch (err) {
       console.error("Error deleting course:", err)
       setError(err instanceof Error ? err.message : "Failed to delete course")
@@ -401,7 +417,7 @@ export default function CoursesPage() {
         <div className="border-t border-border p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, totalCourses)} of {totalCourses} results
+              Showing {totalCourses === 0 ? 0 : (page - 1) * 10 + 1} to {Math.min(page * 10, totalCourses)} of {totalCourses} results
             </p>
             <CoursePagination
               currentPage={page}
@@ -586,13 +602,6 @@ export default function CoursesPage() {
                 ) : (
                   <p className="text-sm text-muted-foreground">No enrolled users.</p>
                 )}
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-medium">All Data (Raw JSON)</p>
-                <pre className="rounded-md border bg-muted/30 p-3 text-xs overflow-x-auto">
-                  {JSON.stringify(selectedCourse, null, 2)}
-                </pre>
               </div>
             </div>
           )}

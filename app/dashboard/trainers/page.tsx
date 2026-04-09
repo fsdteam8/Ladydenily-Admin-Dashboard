@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { trainersAPI, type User } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -60,6 +60,14 @@ export default function TrainersPage() {
 
   const trainers = trainersData?.data?.trainers || []
   const meta = trainersData?.data?.meta
+
+  useEffect(() => {
+    const lastPage = Math.max(meta?.totalPages ?? 1, 1)
+
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage)
+    }
+  }, [currentPage, meta?.totalPages])
 
   if (error) {
     return (

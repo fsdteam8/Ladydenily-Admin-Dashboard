@@ -12,6 +12,7 @@ import {
   User,
   Radio,
   Gift,
+  Settings,
   LogOut,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -33,6 +34,7 @@ const navigation = [
   { name: "User", href: "/user", icon: User },
   { name: "Signal Send", href: "/signal-send", icon: Radio },
   { name: "Offer", href: "/offer", icon: Gift },
+  { name: "Settings", href: "/setting", icon: Settings },
 ];
 
 const handleSignOut = () => {

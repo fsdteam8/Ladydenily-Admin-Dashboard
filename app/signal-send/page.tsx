@@ -21,18 +21,17 @@ export default function SignalSendPage() {
 
   const queryClient = useQueryClient();
 
-  // -----------------------
-  // FETCH MESSAGES
-  // -----------------------
   const { data: messages = [], isLoading: fetchingMessages } = useQuery({
     queryKey: ["messages", chatId],
     queryFn: async () => {
       if (!chatId) return [];
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/chat/messages/${chatId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/chat/messages/${chatId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
       if (!res.ok) throw new Error("Failed to load messages");
+
       const data = await res.json();
       return data.data || [];
     },
@@ -40,9 +39,8 @@ export default function SignalSendPage() {
     refetchInterval: 8000,
   });
 
-  // -----------------------
-  // CREATE CHAT MUTATION
-  // -----------------------
+  const hasMessages = messages.length > 0;
+
   const createChatMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/chat/create`, {
@@ -53,23 +51,28 @@ export default function SignalSendPage() {
         },
         body: JSON.stringify({ signal: true }),
       });
+
       if (!res.ok) throw new Error("Failed to create chat");
+
       const data = await res.json();
       const newChatId = data.data?._id || data.data?.chatId;
+
       if (!newChatId) throw new Error("No chat ID returned");
+
       return newChatId;
     },
     onSuccess: (newId) => {
       setChatId(newId);
+      setError(null);
       setSuccess("Signal chat created successfully!");
       setTimeout(() => setSuccess(null), 3000);
     },
-    onError: (err: any) => setError(err.message),
+    onError: (err: any) => {
+      setSuccess(null);
+      setError(err.message);
+    },
   });
 
-  // -----------------------
-  // SEND MESSAGE MUTATION
-  // -----------------------
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
       if (!chatId) throw new Error("Please create a chat first");
@@ -77,192 +80,181 @@ export default function SignalSendPage() {
 
       const formData = new FormData();
       formData.append("chatId", chatId);
+
       if (message.trim()) formData.append("content", message);
       if (selectedFile) formData.append("file", selectedFile);
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL}/chat/send-message`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        }
-      );
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/chat/send-message`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
 
       if (!res.ok) throw new Error("Failed to send message");
+
       return res.json();
     },
     onSuccess: () => {
       setMessage("");
       setSelectedFile(null);
+      setError(null);
       setSuccess("Message sent successfully!");
       setTimeout(() => setSuccess(null), 3000);
       queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
     },
-    onError: (err: any) => setError(err.message),
+    onError: (err: any) => {
+      setSuccess(null);
+      setError(err.message);
+    },
   });
 
-  // -----------------------
-  // FILE UPLOAD HANDLER
-  // -----------------------
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) setSelectedFile(file);
   };
 
-  // -----------------------
-  // RENDER
-  // -----------------------
   return (
     <div className="min-h-screen bg-slate-100 p-6 pt-12">
-      <div className="max-w-4xl mx-auto">
+      <div>
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Signal Send</h1>
-            <p className="text-sm text-slate-600 mt-1">Dashboard &gt; Signal Send</p>
+            <p className="mt-1 text-sm text-slate-600">Dashboard &gt; Signal Send</p>
           </div>
         </div>
 
-        <div className="bg-[#B8C3D4] p-6 rounded-lg shadow-sm">
-          {/* Alerts */}
+        <div className="flex h-[700px] flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-[#B8C3D4] p-5 shadow-sm">
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-              <p className="text-red-800 text-sm">{error}</p>
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+              <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
+
           {success && (
-            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-              <p className="text-green-800 text-sm">{success}</p>
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
+              <CheckCircle className="mt-0.5 h-5 w-5 text-green-600" />
+              <p className="text-sm text-green-800">{success}</p>
             </div>
           )}
+
           {!isAdmin && (
-            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
-              <p className="text-blue-800 text-sm">
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 text-blue-600" />
+              <p className="text-sm text-blue-800">
                 Only admins can send signals. Current role: {role || "guest"}
               </p>
             </div>
           )}
 
-          {/* Messages */}
-          <div className="space-y-6">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-2">
             {fetchingMessages ? (
-              <p className="text-slate-600 text-center">Loading messages...</p>
-            ) : messages.length > 0 ? (
-              messages.map((msg: any) => (
-                <div
-                  key={msg._id}
-                  className="max-w-2xl bg-slate-50 rounded-lg overflow-hidden p-4"
-                >
-                  {msg.contentType === "file" ? (
-                    msg.content.match(/\.(jpg|jpeg|png|gif)$/i) ? (
-                      <img
-                        src={msg.content}
-                        alt="Uploaded"
-                        className="w-full rounded-lg mb-2"
-                      />
-                    ) : msg.content.match(/\.(mp4|mov)$/i) ? (
-                      <video controls className="w-full rounded-lg mb-2">
-                        <source src={msg.content} type="video/mp4" />
-                      </video>
+              <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-slate-600">Loading messages...</p>
+              </div>
+            ) : hasMessages ? (
+              <div className="space-y-5">
+                {messages.map((msg: any) => (
+                  <div
+                    key={msg._id}
+                    className="w-full max-w-[42rem] rounded-2xl border border-white/70 bg-white/90 px-5 py-4 shadow-sm"
+                  >
+                    {msg.contentType === "file" ? (
+                      msg.content.match(/\.(jpg|jpeg|png|gif)$/i) ? (
+                        <img src={msg.content} alt="Uploaded" className="mb-2 w-full rounded-xl" />
+                      ) : msg.content.match(/\.(mp4|mov)$/i) ? (
+                        <video controls className="mb-2 w-full rounded-xl">
+                          <source src={msg.content} type="video/mp4" />
+                        </video>
+                      ) : (
+                        <a
+                          href={msg.content}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-blue-600 underline"
+                        >
+                          Download File
+                        </a>
+                      )
                     ) : (
-                      <a
-                        href={msg.content}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 underline text-sm"
-                      >
-                        📎 Download File
-                      </a>
-                    )
-                  ) : (
-                    <p className="text-sm text-slate-700 whitespace-pre-line">
-                      {msg.content}
-                    </p>
-                  )}
-                </div>
-              ))
+                      <p className="whitespace-pre-line text-sm text-slate-700">{msg.content}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
-              <p className="text-slate-600 text-center">No messages yet.</p>
+              <div className="flex h-full items-start justify-center pt-6">
+                <p className="text-sm font-medium text-slate-700/90">No messages yet.</p>
+              </div>
             )}
           </div>
 
-          {/* Input */}
-          {chatId && (
-            <div className="mt-6 bg-white rounded-2xl border border-slate-200 px-3 py-3 shadow-sm flex flex-col gap-2">
-              {/* File Preview */}
+          {chatId ? (
+            <div className="mt-6 rounded-[28px] border border-white/70 bg-white px-4 py-4 shadow-sm">
               {selectedFile && (
-                <div className="flex items-center justify-between bg-slate-100 rounded-lg p-2 px-3 text-sm text-slate-700">
+                <div className="mb-3 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   <div className="flex items-center gap-2">
                     <Paperclip className="h-4 w-4 text-slate-500" />
-                    <span className="truncate max-w-[200px]">{selectedFile.name}</span>
+                    <span className="max-w-[220px] truncate">{selectedFile.name}</span>
                   </div>
                   <button
                     onClick={() => setSelectedFile(null)}
-                    className="text-slate-500 hover:text-red-600 transition"
+                    className="text-slate-500 transition hover:text-red-600"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
               )}
 
-              {/* Input Row */}
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-slate-500 hover:text-slate-800"
-                  onClick={() => document.getElementById("fileUpload")?.click()}
-                >
-                  <Paperclip className="h-5 w-5" />
-                  <input
-                    id="fileUpload"
-                    type="file"
-                    accept="image/*,video/*,.pdf,.docx,.xlsx"
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
-                </Button>
-
+              <div className="relative">
                 <Textarea
-                  placeholder={
-                    isAdmin ? "Type a message..." : "Only admins can send messages"
-                  }
+                  placeholder={isAdmin ? "Type a message..." : "Only admins can send messages"}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   disabled={!isAdmin}
-                  className="flex-1 border-none focus-visible:ring-0 focus:outline-none resize-none text-sm text-slate-700 bg-transparent"
-                  rows={1}
+                  className="min-h-[84px] resize-none border-0 bg-transparent px-1 pb-12 pt-1 text-sm text-slate-700 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  rows={3}
                 />
+
+                <div className="absolute bottom-0 left-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    onClick={() => document.getElementById("fileUpload")?.click()}
+                  >
+                    <Paperclip className="h-5 w-5" />
+                    <input
+                      id="fileUpload"
+                      type="file"
+                      accept="image/*,video/*,.pdf,.docx,.xlsx"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </Button>
+                </div>
 
                 <Button
                   size="icon"
                   onClick={() => sendMessageMutation.mutate()}
                   disabled={
-                    (!message.trim() && !selectedFile) ||
-                    !isAdmin ||
-                    sendMessageMutation.isPending
+                    (!message.trim() && !selectedFile) || !isAdmin || sendMessageMutation.isPending
                   }
-                  className="bg-yellow-400 hover:bg-yellow-500 text-black rounded-full disabled:opacity-50"
+                  className="absolute bottom-0 right-0 h-10 w-10 rounded-full bg-[#FFD966] text-black shadow-sm hover:bg-[#FACC15] disabled:opacity-50"
                 >
                   <Send className="h-5 w-5" />
                 </Button>
               </div>
             </div>
-          )}
-
-          {/* Create Chat */}
-          {!chatId && (
-            <div className="mt-6 p-6 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 text-center">
-              <p className="text-slate-600 mb-4">
+          ) : (
+            <div className="mt-6 rounded-[28px] border-2 border-dashed border-white/70 bg-white/80 px-6 py-10 text-center shadow-inner">
+              <p className="mb-5 text-lg font-medium text-slate-700">
                 Create a signal chat to start sending messages
               </p>
               <Button
                 onClick={() => createChatMutation.mutate()}
                 disabled={createChatMutation.isPending}
-                className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold"
+                className="rounded-xl bg-[#FFC107] px-6 font-semibold text-black shadow-sm hover:bg-[#FFB300]"
               >
                 {createChatMutation.isPending ? "Creating..." : "Create Signal Chat"}
               </Button>

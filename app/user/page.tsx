@@ -1,19 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { studentsAPI, type User } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Trash2 } from "lucide-react"
+import { Eye, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { UserPagination } from "@/components/user-pagination"
 import { DeleteConfirmModal } from "@/components/delete-confirm-modal"
+import { UserDetailsModal } from "@/components/user-details-modal"
 
 export default function UserPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; user: User | null }>({
+    isOpen: false,
+    user: null,
+  })
+  const [viewModal, setViewModal] = useState<{ isOpen: boolean; user: User | null }>({
     isOpen: false,
     user: null,
   })
@@ -45,6 +50,10 @@ export default function UserPage() {
     setDeleteModal({ isOpen: true, user })
   }
 
+  const handleViewUser = (user: User) => {
+    setViewModal({ isOpen: true, user })
+  }
+
   const confirmDelete = () => {
     if (deleteModal.user) {
       deleteUserMutation.mutate(deleteModal.user._id)
@@ -53,6 +62,14 @@ export default function UserPage() {
 
   const users = usersData?.data?.students || []
   const meta = usersData?.data?.meta
+
+  useEffect(() => {
+    const lastPage = Math.max(meta?.totalPages ?? 1, 1)
+
+    if (currentPage > lastPage) {
+      setCurrentPage(lastPage)
+    }
+  }, [currentPage, meta?.totalPages])
 
   if (error) {
     return (
@@ -105,7 +122,10 @@ export default function UserPage() {
                         <Skeleton className="h-4 w-24" />
                       </td>
                       <td className="p-4">
-                        <Skeleton className="h-8 w-8" />
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-8 w-8" />
+                          <Skeleton className="h-8 w-8" />
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -124,18 +144,28 @@ export default function UserPage() {
                         </div>
                       </td>
                       <td className="p-4 text-muted-foreground">{user.email}</td>
-                      <td className="p-4 text-foreground">{user.phone}</td>
+                      <td className="p-4 text-foreground">{user.phone || "N/A"}</td>
                       <td className="p-4 text-foreground">{user.treding_profile?.trading_exprience || "N/A"}</td>
                       <td className="p-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteUser(user)}
-                          disabled={deleteUserMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="hover:bg-primary/10"
+                            onClick={() => handleViewUser(user)}
+                          >
+                            <Eye className="h-4 w-4 text-primary" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={deleteUserMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -148,7 +178,7 @@ export default function UserPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {meta
-                ? `Showing ${(currentPage - 1) * 10 + 1} to ${Math.min(currentPage * 10, meta.total)} of ${meta.total} results`
+                ? `Showing ${meta.total === 0 ? 0 : (currentPage - 1) * 10 + 1} to ${Math.min(currentPage * 10, meta.total)} of ${meta.total} results`
                 : "Loading..."}
             </p>
             {meta && (
@@ -165,6 +195,14 @@ export default function UserPage() {
         title="Delete User"
         description={`Are you sure you want to delete ${deleteModal.user?.name}? This action cannot be undone.`}
         isLoading={deleteUserMutation.isPending}
+      />
+
+      <UserDetailsModal
+        isOpen={viewModal.isOpen}
+        onClose={() => setViewModal({ isOpen: false, user: null })}
+        user={viewModal.user}
+        title="User Details"
+        description="View all available user information."
       />
     </div>
   )

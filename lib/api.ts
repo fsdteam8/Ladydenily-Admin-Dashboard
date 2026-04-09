@@ -43,17 +43,25 @@ export interface User {
   email: string
   username: string
   phone: string
+  age?: string | null
+  gender?: string | null
+  nationality?: string | null
+  credit?: number | null
   role: "admin" | "trainer" | "student"
+  stripeAccountId?: string
+  isStripeOnboarded?: boolean
   avatar: {
     public_id: string
     url: string
   }
-  address: {
-    street: string
-    city: string
-    state: string
-    zipCode: string
-  }
+  address:
+    | string
+    | {
+        street?: string
+        city?: string
+        state?: string
+        zipCode?: string
+      }
   userRating: {
     competence: { star: number; comment: string }
     punctuality: { star: number; comment: string }
@@ -66,9 +74,12 @@ export interface User {
     risk_appetite: string
     preffered_learning: string[]
   }
+  fine?: number
+  treding_profile_Complete?: boolean
   uniqueId: string
   createdAt: string
   updatedAt: string
+  __v?: number
 }
 
 export interface AuthResponse {
@@ -122,6 +133,21 @@ export interface CreateTrainerData {
     risk_appetite: string
     preffered_learning: string[]
   }
+}
+
+export interface UpdateProfileData {
+  name?: string
+  phone?: string
+  age?: string
+  gender?: string
+  nationality?: string
+  address?: string
+  avatar?: File | null
+}
+
+export interface ChangePasswordData {
+  oldPassword: string
+  newPassword: string
 }
 
 // Authentication API
@@ -182,6 +208,36 @@ export const studentsAPI = {
 
   deleteStudent: async (id: string): Promise<ApiResponse<any>> => {
     const response: AxiosResponse<ApiResponse<any>> = await apiClient.delete(`/user/students/${id}`)
+    return response.data
+  },
+}
+
+export const profileAPI = {
+  getProfile: async (): Promise<ApiResponse<User>> => {
+    const response: AxiosResponse<ApiResponse<User>> = await apiClient.get("/user/profile")
+    return response.data
+  },
+
+  updateProfile: async (data: UpdateProfileData): Promise<ApiResponse<User>> => {
+    const formData = new FormData()
+    if (data.name !== undefined) formData.append("name", data.name)
+    if (data.phone !== undefined) formData.append("phone", data.phone)
+    if (data.age !== undefined) formData.append("age", data.age)
+    if (data.gender !== undefined) formData.append("gender", data.gender)
+    if (data.nationality !== undefined) formData.append("nationality", data.nationality)
+    if (data.address !== undefined) formData.append("address", data.address)
+    if (data.avatar) formData.append("avatar", data.avatar)
+
+    const response: AxiosResponse<ApiResponse<User>> = await apiClient.patch("/user/update-profile", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    })
+    return response.data
+  },
+
+  changePassword: async (data: ChangePasswordData): Promise<ApiResponse<User>> => {
+    const response: AxiosResponse<ApiResponse<User>> = await apiClient.post("/auth/change-password", data)
     return response.data
   },
 }

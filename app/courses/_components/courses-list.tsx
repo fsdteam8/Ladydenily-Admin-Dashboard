@@ -3,7 +3,16 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Eye, Trash2 } from "lucide-react"
+import { DeleteConfirmModal } from "@/components/delete-confirm-modal"
+import {
+  ExternalLink,
+  Eye,
+  File,
+  FileAudio,
+  FileSpreadsheet,
+  FileText,
+  Trash2,
+} from "lucide-react"
 import { CoursePagination } from "@/components/course-pagination"
 import Image from "next/image"
 import { useState, useEffect } from "react"
@@ -215,6 +224,138 @@ const transformApiCourse = (apiCourse: ApiCourse): Course => {
   }
 }
 
+const getAssetPath = (value: string) => {
+  const sanitizedValue = value.split("#")[0].split("?")[0]
+
+  try {
+    return new URL(sanitizedValue).pathname
+  } catch {
+    return sanitizedValue
+  }
+}
+
+const getAssetExtension = (url: string, name?: string) => {
+  const source = name && name.includes(".") ? name : getAssetPath(url).split("/").pop() || ""
+  const extension = source.split(".").pop()
+
+  return extension ? extension.toLowerCase() : ""
+}
+
+const getAssetKind = (url: string, name?: string) => {
+  const extension = getAssetExtension(url, name)
+
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "avif"].includes(extension)) {
+    return "image"
+  }
+
+  if (["mp4", "mov", "webm", "m4v", "ogg"].includes(extension)) {
+    return "video"
+  }
+
+  if (extension === "pdf") {
+    return "pdf"
+  }
+
+  if (["doc", "docx", "txt", "rtf"].includes(extension)) {
+    return "document"
+  }
+
+  if (["xls", "xlsx", "csv"].includes(extension)) {
+    return "spreadsheet"
+  }
+
+  if (["mp3", "wav", "aac", "m4a"].includes(extension)) {
+    return "audio"
+  }
+
+  return "file"
+}
+
+const renderAssetPreview = (
+  asset: { _id: string; name: string; url: string; public_id?: string; no?: number },
+  label: string,
+) => {
+  const kind = getAssetKind(asset.url, asset.name)
+  const extension = getAssetExtension(asset.url, asset.name) || "file"
+  const title = asset.no ? `${asset.no}. ${asset.name}` : asset.name
+
+  return (
+    <div key={asset._id} className="space-y-3 rounded-lg border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-foreground break-words">{title}</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+        </div>
+        <a
+          href={asset.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium text-primary hover:bg-primary/5"
+        >
+          Open
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+
+      {kind === "image" && (
+        <img
+          src={asset.url}
+          alt={title}
+          className="max-h-72 w-full rounded-md border bg-muted/20 object-contain"
+        />
+      )}
+
+      {kind === "video" && (
+        <video controls className="w-full rounded-md border bg-black/5">
+          <source src={asset.url} />
+          Your browser does not support the video tag.
+        </video>
+      )}
+
+      {kind === "audio" && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-md border bg-muted/20 p-4">
+            <FileAudio className="h-5 w-5 text-primary" />
+            <p className="text-sm text-muted-foreground">Audio preview</p>
+          </div>
+          <audio controls className="w-full">
+            <source src={asset.url} />
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+      )}
+
+      {kind === "pdf" && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 rounded-md border bg-muted/20 p-4">
+            <FileText className="h-5 w-5 text-primary" />
+            <p className="text-sm text-muted-foreground">PDF preview</p>
+          </div>
+          <iframe src={asset.url} title={title} className="h-80 w-full rounded-md border bg-white" />
+        </div>
+      )}
+
+      {kind !== "image" && kind !== "video" && kind !== "audio" && kind !== "pdf" && (
+        <div className="flex items-center gap-3 rounded-md border bg-muted/20 p-4">
+          {kind === "document" && <FileText className="h-5 w-5 text-primary" />}
+          {kind === "spreadsheet" && <FileSpreadsheet className="h-5 w-5 text-primary" />}
+          {kind === "file" && <File className="h-5 w-5 text-primary" />}
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground break-words">{asset.name}</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{extension}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-1 text-xs text-muted-foreground">
+        <p className="break-all">URL: {asset.url}</p>
+        <p className="break-all">Public ID: {asset.public_id || "N/A"}</p>
+        <p className="break-all">ID: {asset._id}</p>
+      </div>
+    </div>
+  )
+}
+
 export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
@@ -222,6 +363,11 @@ export default function CoursesPage() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalCourses, setTotalCourses] = useState(0)
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; course: Course | null }>({
+    isOpen: false,
+    course: null,
+  })
+  const [isDeletingCourse, setIsDeletingCourse] = useState(false)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [detailsError, setDetailsError] = useState<string | null>(null)
@@ -259,11 +405,17 @@ export default function CoursesPage() {
     }
   }, [page, totalPages])
 
-  const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm("Are you sure you want to delete this course?")) return
+  const handleDeleteCourse = (course: Course) => {
+    setDeleteModal({ isOpen: true, course })
+  }
+
+  const confirmDeleteCourse = async () => {
+    if (!deleteModal.course) return
+
     try {
-      await deleteCourse(courseId, token)
-      setCourses((prev) => prev.filter((course) => course.id !== courseId))
+      setIsDeletingCourse(true)
+      await deleteCourse(deleteModal.course.id, token)
+      setCourses((prev) => prev.filter((course) => course.id !== deleteModal.course?.id))
       setTotalCourses((prev) => {
         const nextTotal = Math.max(prev - 1, 0)
         const nextTotalPages = Math.max(Math.ceil(nextTotal / 10), 1)
@@ -273,9 +425,12 @@ export default function CoursesPage() {
 
         return nextTotal
       })
+      setDeleteModal({ isOpen: false, course: null })
     } catch (err) {
       console.error("Error deleting course:", err)
       setError(err instanceof Error ? err.message : "Failed to delete course")
+    } finally {
+      setIsDeletingCourse(false)
     }
   }
 
@@ -400,7 +555,7 @@ export default function CoursesPage() {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteCourse(course.id)}
+                          onClick={() => handleDeleteCourse(course)}
                           aria-label={`Delete course ${course.title}`}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -550,24 +705,18 @@ export default function CoursesPage() {
                           {module.assignment.length}
                         </p>
                         {module.video.length > 0 && (
-                          <div className="mt-2 space-y-1">
+                          <div className="mt-3 space-y-3">
                             <p className="font-medium">Videos</p>
                             {module.video.map((video) => (
-                              <div key={video._id} className="text-muted-foreground break-all">
-                                {video.no}. {video.name} | {video.url} | public_id: {video.public_id || "N/A"} | id:{" "}
-                                {video._id}
-                              </div>
+                              renderAssetPreview(video, "Video")
                             ))}
                           </div>
                         )}
                         {module.resources.length > 0 && (
-                          <div className="mt-2 space-y-1">
+                          <div className="mt-3 space-y-3">
                             <p className="font-medium">Resources</p>
                             {module.resources.map((resource) => (
-                              <div key={resource._id} className="text-muted-foreground break-all">
-                                {resource.name} | {resource.url} | public_id: {resource.public_id || "N/A"} | id:{" "}
-                                {resource._id}
-                              </div>
+                              renderAssetPreview(resource, "Resource")
                             ))}
                           </div>
                         )}
@@ -607,6 +756,15 @@ export default function CoursesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, course: null })}
+        onConfirm={confirmDeleteCourse}
+        title="Delete Course"
+        description={`Are you sure you want to delete ${deleteModal.course?.title}? This action cannot be undone.`}
+        isLoading={isDeletingCourse}
+      />
     </div>
   )
 }

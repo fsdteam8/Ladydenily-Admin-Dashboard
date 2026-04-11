@@ -13,6 +13,14 @@ const apiClient = axios.create({
 // Request interceptor to add token
 apiClient.interceptors.request.use(
   async (config) => {
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+      if (typeof config.headers?.delete === "function") {
+        config.headers.delete("Content-Type")
+      } else if (config.headers) {
+        delete config.headers["Content-Type"]
+      }
+    }
+
     const session = await getSession()
     if (session?.accessToken) {
       config.headers.Authorization = `Bearer ${session.accessToken}`
@@ -100,17 +108,18 @@ export interface ApiResponse<T> {
   data: T
 }
 
-export interface PaginatedResponse<T> {
+export interface PaginationMeta {
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
+export interface PaginatedResponse<T, K extends string> {
   success: boolean
   message: string
-  data: {
-    [key: string]: T[]
-    meta: {
-      total: number
-      page: number
-      limit: number
-      totalPages: number
-    }
+  data: Record<K, T[]> & {
+    meta: PaginationMeta
   }
 }
 
@@ -150,6 +159,37 @@ export interface ChangePasswordData {
   newPassword: string
 }
 
+export type MarketItemType = "best seller" | "free" | "recommended"
+
+export interface MarketItem {
+  _id: string
+  title: string
+  description: string
+  price?: number | null
+  type: MarketItemType
+  image?: string
+  imagePublicId?: string
+  shopeLink?: string
+  review?: Array<{
+    user?: string
+    rating?: number
+    message?: {
+      type?: string
+    }
+  }>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MarketItemPayload {
+  title: string
+  description: string
+  price?: number | null
+  type: MarketItemType
+  image?: File | null
+  shopeLink: string
+}
+
 // Authentication API
 export const authAPI = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
@@ -179,8 +219,8 @@ export const authAPI = {
 
 // Trainers API
 export const trainersAPI = {
-  getTrainers: async (page = 1, limit = 10): Promise<PaginatedResponse<User>> => {
-    const response: AxiosResponse<PaginatedResponse<User>> = await apiClient.get(
+  getTrainers: async (page = 1, limit = 10): Promise<PaginatedResponse<User, "trainers">> => {
+    const response: AxiosResponse<PaginatedResponse<User, "trainers">> = await apiClient.get(
       `/user/trainers?page=${page}&limit=${limit}`,
     )
     return response.data
@@ -199,8 +239,8 @@ export const trainersAPI = {
 
 // Students API
 export const studentsAPI = {
-  getStudents: async (page = 1, limit = 10): Promise<PaginatedResponse<User>> => {
-    const response: AxiosResponse<PaginatedResponse<User>> = await apiClient.get(
+  getStudents: async (page = 1, limit = 10): Promise<PaginatedResponse<User, "students">> => {
+    const response: AxiosResponse<PaginatedResponse<User, "students">> = await apiClient.get(
       `/user/students?page=${page}&limit=${limit}`,
     )
     return response.data
@@ -238,6 +278,56 @@ export const profileAPI = {
 
   changePassword: async (data: ChangePasswordData): Promise<ApiResponse<User>> => {
     const response: AxiosResponse<ApiResponse<User>> = await apiClient.post("/auth/change-password", data)
+    return response.data
+  },
+}
+
+export const marketAPI = {
+  getMarketItems: async (type?: MarketItemType): Promise<ApiResponse<MarketItem[]>> => {
+    const response: AxiosResponse<ApiResponse<MarketItem[]>> = await apiClient.get("/market", {
+      params: type ? { type } : undefined,
+    })
+    return response.data
+  },
+
+  createMarketItem: async (data: MarketItemPayload): Promise<ApiResponse<MarketItem>> => {
+    const formData = new FormData()
+    formData.append("title", data.title)
+    formData.append("description", data.description)
+    formData.append("type", data.type)
+    formData.append("shope-link", data.shopeLink)
+    if (data.price !== undefined && data.price !== null) {
+      formData.append("price", data.price.toString())
+    }
+    if (data.image) {
+      formData.append("image", data.image)
+    }
+
+    const response: AxiosResponse<ApiResponse<MarketItem>> = await apiClient.post("/market", formData)
+    return response.data
+  },
+
+  updateMarketItem: async (id: string, data: MarketItemPayload): Promise<ApiResponse<MarketItem>> => {
+    const formData = new FormData()
+    formData.append("title", data.title)
+    formData.append("description", data.description)
+    formData.append("type", data.type)
+    formData.append("shope-link", data.shopeLink)
+    if (data.price !== undefined && data.price !== null) {
+      formData.append("price", data.price.toString())
+    } else {
+      formData.append("price", "")
+    }
+    if (data.image) {
+      formData.append("image", data.image)
+    }
+
+    const response: AxiosResponse<ApiResponse<MarketItem>> = await apiClient.put(`/market/${id}`, formData)
+    return response.data
+  },
+
+  deleteMarketItem: async (id: string): Promise<ApiResponse<MarketItem>> => {
+    const response: AxiosResponse<ApiResponse<MarketItem>> = await apiClient.delete(`/market/${id}`)
     return response.data
   },
 }

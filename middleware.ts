@@ -9,10 +9,11 @@ export async function middleware(request: NextRequest) {
   })
 
   const { pathname } = request.nextUrl
+  const isAuthPage = pathname.startsWith("/auth")
   const isAdmin = token?.role === "admin"
 
   // Protected routes that require authentication
-  const protectedRoutes = ["/dashboard", "/trainer", "/user", "/courses", "/signal-send", "/offer"]
+  const protectedRoutes = ["/dashboard", "/trainer", "/user", "/courses", "/signal-send", "/offer", "/market-plase"]
 
   // Check if the current path is a protected route
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
@@ -28,7 +29,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // If authenticated admin user tries to access auth pages, redirect to dashboard
-  if (token && isAdmin && pathname.startsWith("/auth")) {
+  if (token && isAdmin && isAuthPage) {
     return NextResponse.redirect(new URL("/", request.url))
   }
 
@@ -43,6 +44,7 @@ export const config = {
     "/courses/:path*",
     "/signal-send/:path*",
     "/offer/:path*",
+    "/market-plase/:path*",
     "/auth/:path*",
   ],
 }

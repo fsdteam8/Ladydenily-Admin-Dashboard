@@ -34,6 +34,7 @@ const navigation = [
   { name: "User", href: "/user", icon: User },
   { name: "Signal Send", href: "/signal-send", icon: Radio },
   { name: "Offer", href: "/offer", icon: Gift },
+  { name: "Market Place", href: "/market-plase", icon: Gift },
   { name: "Settings", href: "/setting", icon: Settings },
 ];
 
